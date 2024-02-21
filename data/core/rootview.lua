@@ -61,11 +61,34 @@ end
 
 
 function Node:on_mouse_moved(x, y, ...)
-  self.hovered_tab = self:get_tab_overlapping_point(x, y)
+  -- self.hovered_tab = self:get_tab_overlapping_point(x, y)
   if self.type == "leaf" then
     self.active_view:on_mouse_moved(x, y, ...)
   else
     self:propagate("on_mouse_moved", x, y, ...)
+  end
+end
+
+local function close_button_location(x, y, w, h)
+  local cw = style.icon_font:get_width("C")
+  local pad = style.padding.y
+
+  return x + w - pad - cw, w, pad
+end
+
+function Node:tab_hovered_update(px, py)
+  local tab_index = self:get_tab_overlapping_point(px, py)
+  self.hovered_tab = tab_index
+  self.hovered_close = 0
+
+  if tab_index then
+    local pad, icon_w = style.padding.y, style.icon_font:get_width("C")
+    local x, y, w, h = self:get_tab_rect(tab_index)
+    local cx, cw = close_button_location(x, y, w, h)
+    
+    if px >= cx and px < cx + cw and py >= y and py < y + h then
+      self.hovered_close = tab_index
+    end
   end
 end
 
@@ -321,6 +344,7 @@ function Node:update()
     for _, view in ipairs(self.views) do
       view:update()
     end
+    self:tab_hovered_update(core.root_view.mouse.x, core.root_view.mouse.y)
   else
     self.a:update()
     self.b:update()
@@ -344,6 +368,11 @@ function Node:draw_tabs()
       renderer.draw_rect(x, y, w, h, style.background)
       renderer.draw_rect(x + w, y, ds, h, style.divider)
       renderer.draw_rect(x - ds, y, ds, h, style.divider)
+    end
+    if view == self.active_view or i == self.hovered_tab then
+      local cx, cw, cpad = close_button_location(x, y, w, h)
+      local close_style = self.hovered_close == i and style.text or style.dim
+      common.draw_text(style.icon_font, close_style, "C", nil, cx, y, cw, h)
     end
     if i == self.hovered_tab then
       color = style.text
@@ -428,7 +457,9 @@ function RootView:on_mouse_pressed(button, x, y, clicks)
   local idx = node:get_tab_overlapping_point(x, y)
   if idx then
     node:set_active_view(node.views[idx])
-    if button == "middle" then
+    print(node.hovered_close, idx)
+    if button == "middle" or node.hovered_close == idx then
+      print("closing")
       node:close_active_view(self.root_node)
     end
   else
